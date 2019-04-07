@@ -48,7 +48,7 @@ def create_groups(df, level_1, level_2):
 
 def summarize_crimes_by_type(df):
 
-    crimes_by_type = create_groups('year', 'primary_type')
+    crimes_by_type = create_groups(df, 'year', 'primary_type')
     crimes_by_type.index.name = None
     crimes_by_type['total'] = crimes_by_type['2017'] + crimes_by_type['2018']
     crimes_by_type['percent_change'] = crimes_by_type.pct_change\
@@ -57,12 +57,17 @@ def summarize_crimes_by_type(df):
 
     #return a table
 
-
-def create_crime_heatmap(df):
+def create_months(df):
 
     df['date'] = df.date.astype('datetime64[M]')
     df['month'] = df.date.dt.to_period('M')
-    crimes_by_month = create_groups('month', 'primary_type')
+
+    return df
+
+def create_crime_heatmap(df):
+
+    df_with_months = create_months(df)
+    crimes_by_month = create_groups(df_with_months, 'month', 'primary_type')
     crimes_by_month.index.name = None
     sns.set(font_scale=0.5)
     heatmap = sns.heatmap(crimes_by_month,
@@ -75,9 +80,22 @@ def create_crime_heatmap(df):
     heatmap.set_title('Number of Crimes by Month, 2017-2018')
     plt.show(heatmap)
 
-def summarize_crimes_by_month
+def summarize_crimes_by_month(df):
 
-    crimes_by_month = create_groups('year', 'primary_type')
+    df_with_months = create_months(df)
+    df_with_months.groupby(['month'], as_index=False).agg({'case_number':
+                                                          'count'})
+
+def summarize_crimes_by_community_area(df):
+
+    df.groupby(['community_area'], as_index=False).agg({'case_number':
+               'count', 'arrest': 'sum'})
+    #.sort_values(by=['case_number'], ascending=False)
+    #ensure that the arrests are calculating correctly
+    #more heatmaps by location?
+
+
+
 
 
 
