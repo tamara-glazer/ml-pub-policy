@@ -10,11 +10,15 @@ from sodapy import Socrata
 import seaborn as sns
 import matplotlib.pyplot as plt
 import xlsxwriter
+import requests
+from uszipcode import SearchEngine
+
 
 URL = 'data.cityofchicago.org'
 ENDPOINT = '6zsd-86xi'
 TOKEN = 'YNQSgf5W1B65zdCeAX4nY9CXl'
 CSV = 'crimes_2017_to_2018'
+ACS = 'https://api.census.gov/data/2017/acs/acs5/?get=B01003_001E,B02001_003E,B15003_017E,B08121_001E,B07012_002E&for=zip code tabulation area:*'
 
 
 def load_data(url=URL, token=TOKEN, endpoint=ENDPOINT):
@@ -146,6 +150,32 @@ def provide_summary_stats(df):
 
 def more_community_area(df):
     pass
+
+    def join_in_acs(df, url=ACS):
+    '''
+    1. B01003_001E = total population
+    2. B02001_003E = total number of black or African American residents (divide by total population)
+    3. B15003_017E = total number of people with a Regular high school diploma among those 25 years and older (divide by total population)
+    4. B08121_001E = Estimate!!Median earnings in the past 12 months!!Total",
+    5. B07012_002E = Estimate!!Total living in area 1 year ago!!Below 100 percent of the poverty level (divided by total population)
+    '''
+    request_obj = requests.get(url)
+    json = request_obj.json()
+    df = pd.DataFrame(json)
+    header = df.iloc[0]
+    df.rename(columns=header, inplace=True)
+    df.drop([0], inplace=True)
+    df.rename(columns={'B01003_001E': 'total_population',
+                       'B02001_003E': 'number_black_residents',
+                       'B15003_017E': 'number_over_25_with_hs_diploma',
+                       'B08121_001E': 'median_annual_earnings',
+                       'B07012_002E': 'total_below_poverty_line'}, inplace=True)
+    df = df.apply(pd.to_numeric)
+    df['percent_back_residents'] = df.number_black_residents / df.total_population
+    df['percent_school_diploma'] = df.number_over_25_with_hs_diploma / df.total_population
+
+
+    search = SearchEngine(simple_zipcode=False)
 
 
 
