@@ -14,14 +14,12 @@ import requests
 from uszipcode import SearchEngine
 
 
-URL = 'data.cityofchicago.org'
-ENDPOINT = '6zsd-86xi'
-TOKEN = 'YNQSgf5W1B65zdCeAX4nY9CXl'
-CSV = 'crimes_2017_to_2018'
+URL_2017 = 'https://data.cityofchicago.org/resource/6zsd-86xi.json?year=2017&$limit=600000'
+URL_2018 = 'https://data.cityofchicago.org/resource/6zsd-86xi.json?year=2018&$limit=600000'
 ACS = 'https://api.census.gov/data/2017/acs/acs5/?get=B01003_001E,B02001_003E,B15003_017E,B08121_001E,B07012_002E&for=zip code tabulation area:*'
 
 
-def load_data(url=URL, token=TOKEN, endpoint=ENDPOINT):
+def load_one_year(URL):
     '''
     Uses the Socrata Open Data API (SODA) to retrieve data from the Chicago
     Data Portal on crimes reported between 2017 and 2018 using a unique,
@@ -36,19 +34,12 @@ def load_data(url=URL, token=TOKEN, endpoint=ENDPOINT):
     Output:
         df (dataframe): a pandas dataframe containing data for 2017 and 2018
     '''
-    client = Socrata(URL, TOKEN)
-    results = client.get(ENDPOINT, where='year >= 2017 and year <=2018')
-    df = pd.DataFrame.from_records(results)
+
+    request = requests.get(URL)
+    json = request_2017.json()
+    df = pd.DataFrame(json)
 
     return df
-
-def read_csv(input_file=CSV):
-    '''
-    INSERT DOCSTRINg
-    '''
-
-    csv = pd.read_csv(CSV)
-    return csv
 
 
 def create_groups(df, level_1, level_2):
@@ -73,17 +64,6 @@ def summarize_crimes_by_type(df, output_file):
     crimes_by_type['Percent Change'] = crimes_by_type.pct_change\
                                        (axis='columns')[2018].round(2)
     crimes_by_type.to_excel(output_file)
-
-
-def create_months(df):
-    '''
-    INSERT DOCSTRING
-    '''
-
-    df['Date'] = df.Date.astype('datetime64[M]')
-    df['Month'] = df.Date.dt.to_period('M')
-
-    return df
 
 
 def create_crime_heatmap(df):
@@ -151,7 +131,7 @@ def provide_summary_stats(df):
 def more_community_area(df):
     pass
 
-    def join_in_acs(df, url=ACS):
+def generate_acs_variables(url=ACS):
     '''
     1. B01003_001E = total population
     2. B02001_003E = total number of black or African American residents (divide by total population)
@@ -166,16 +146,55 @@ def more_community_area(df):
     df.rename(columns=header, inplace=True)
     df.drop([0], inplace=True)
     df.rename(columns={'B01003_001E': 'total_population',
-                       'B02001_003E': 'number_black_residents',
-                       'B15003_017E': 'number_over_25_with_hs_diploma',
+                       'B02001_003E': 'num_black',
+                       'B15003_017E': 'num_over_25_with_hs_diploma',
                        'B08121_001E': 'median_annual_earnings',
-                       'B07012_002E': 'total_below_poverty_line'}, inplace=True)
+                       'B07012_002E': 'num_below_poverty_line',
+                       'zip code tabulation area': 'zip_code'}, inplace=True)
     df = df.apply(pd.to_numeric)
-    df['percent_back_residents'] = df.number_black_residents / df.total_population
-    df['percent_school_diploma'] = df.number_over_25_with_hs_diploma / df.total_population
+    df['percent_black'] = df.num_black_residents /\
+                                    df.total_population
+    df['percent_hs_diploma'] = df.num_over_25_with_hs_diploma /\
+                                        df.total_population
+    df['percent_below_poverty_line'] = df.tnum_below_poverty_line /\
+                                       df.total_population
+    df.drop(columns=['num_black', 'num_over_25_with_hs_diploma',\
+                     'num_below_poverty_line'], inplace=True)
+    acs_df = df[['zip_code', 'total_population', 'median_annual_earnings',\
+                 'percent_black', 'percent_hs_diploma',\
+                 'percent_below_poverty_line']]
+
+    return acs_df
+
+def create_crime_zip_codes(crime_df):
+    '''
+    DOC STRING - convert blocks to zip codes to join in census data
+    '''
+    search = SearchEngine(simple_zipcode=True)
+    crime_df['zip_code'] = crime_df.apply(lambda x:\
+                                          search.by_coordinates(x.Latitude,
+                                          x.Longitude)[0].zipcode, axis=1)
+    return crime_df
+
+def join_acs_to_crime(crime_df, acs_df):
+    '''
+    DOC STRING
+    '''
+    full_df = pd.merge(crime_df, acs_df, on='zip_code', how='left')
+
+def go():
+
+    crime_2017 = load_one_year(URL_2017)
+    crime_2018 = load_one_year(URL_2018)
+    df = crime_2017.append(crime_2018)
+    df['Date'] = df.Date.astype('datetime64[M]')
+    df['Month'] = df.Date.dt.to_period('M')
+
+    summarize_crimes_by_type(crime_df, 'crimes_by_type.xlsx')
+    reate_crime_heatmap(crime_df)
 
 
-    search = SearchEngine(simple_zipcode=False)
+
 
 
 
