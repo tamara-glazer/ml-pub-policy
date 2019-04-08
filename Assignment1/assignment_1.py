@@ -109,38 +109,52 @@ def create_crime_heatmap(df, output_file):
                           mask=(crimes_by_month == 0))
     heatmap.set_title('Number of Crimes by Month, 2017-2018')
     figure = heatmap.get_figure()
-    figure.savefig('test.png', dpi=400)
+    figure.savefig(output_file, dpi=400)
+    plt.clf()
 
 
 def summarize_crimes_by_month(df, output_file):
     '''
-    Creates a summary table of total number of reported cases by month.
+    Creates a summary table of total number of reported cases and average
+    number of arrests per month, from 2017-2018.
 
     Inputs:
         df (dataframe): a pandas dataframe
         output_file (str): output file name
     '''
     monthly = df.groupby(['month'], as_index=False).agg({'case_number':
-                                                         'count'})
-    monthly.rename(columns={'case_number': 'number_of_cases'})
+                                                         'count', 'arrest':
+                                                         'sum'})
+    monthly.index.name = None
+    monthly.rename(columns={'case_number': 'number_of_cases', 'arrest':
+                            'number_of_arrests'}, inplace=True)
     monthly.to_excel(output_file, index=False)
 
 
-def summarize_crimes_by_neighborhood(df, output_file):
+def summarize_crimes_by_neighborhood(df, output_file_high, output_file_low):
     '''
     Creates a summary table of total number of cases and arrests reported by
-    neighborhood in 2017-2018. The table is sorted by total number of arrests.
+    neighborhood in 2017-2018. Two tables are saved: one for the top 5 most
+    reported crimes, and one for the top 5 fewest reported crimes.
     
     Inputs:
         df (dataframe): a pandas dataframe
-        output_file (str): output file name
+        output_file_high (str): output file name (5 highest)
+        output_file_low (str): output file name (5 lowest)
     '''
 
     district = df.groupby(['neighborhood'], as_index=False).agg({'case_number':
-                          'count', 'arrest': 'sum'})
-    district['arrest'] = district['arrest'].astype(int)
-    district.sort_values('arrest', ascending=False, inplace=True)
-    district.to_excel(output_file, index=False)
+                                                                 'count',
+                                                                 'arrest':
+                                                                 'sum'})
+    district.index.name = None
+    district.rename(columns={'case_number': 'number_of_cases', 'arrest':
+                             'number_of_arrests'}, inplace=True)
+    highest = district.nlargest(5, 'number_of_cases')
+    lowest = district.nsmallest(5, 'number_of_cases')
+    highest.to_excel(output_file_high, index=False)
+    lowest.to_excel(output_file_low, index=False)
+    plt.clf()
 
 
 def summarize_arrests_over_time(df, output_file):
@@ -181,28 +195,12 @@ def create_crime_location_heatmap(df, output_file):
     heatmap.set_title('Number of Crimes by Type and Neighborhood, 2017-2018')
     figure = heatmap.get_figure()
     figure.savefig(output_file, dpi=400)
+    plt.clf()
 
 
-def calculate_avg_arrests_per_month(df, output_file):
+def print_summary_tables_q1(df):
     '''
-    Creates a summary table of the average number of arrests by neighborhood,
-    per month, from 2017-2018. The table is sorted by avg. number of arrests.
-    
-    Inputs:
-        df (dataframe): a pandas dataframe
-        output_file (str): output file name
-    '''
-    groups = df.groupby(['neighborhood'], as_index=False).agg({'arrest': 'sum'})
-    groups.arrest = groups.arrest / 24
-    groups = groups.round(2).sort_values('arrest', ascending=False)
-    groups.index.name = None
-    groups.rename(columns={'arrest': 'avg_arrests'}, inplace=True)
-    groups.to_excel(output_file, index=False)
-
-
-def print_summary_tables(df):
-    '''
-    Print all summary tables and graphs.
+    Print all summary tables and graphs for Question 1.
 
     Input:
         df (dataframe): crimes dataframe
@@ -211,11 +209,11 @@ def print_summary_tables(df):
     sns.set(font_scale=0.5)
     summarize_crimes_by_type(df, 'crimes_by_type.xlsx')
     create_crime_heatmap(df, 'crime_heatmap.png')
-    summarize_crimes_by_month(df, 'crime_total_by_month.xlsx')
-    summarize_crimes_by_neighborhood(df, 'crime_and_arrest_total_by_neighborhood.xlsx')
+    summarize_crimes_by_month(df, 'crimes_by_month.xlsx')
+    summarize_crimes_by_neighborhood(df, 'top5_neighborhoods.xlsx',
+                                     'bottom5_neighborhoods.xlsx')
     summarize_arrests_over_time(df, 'running_total_cases.png')
     create_crime_location_heatmap(df, 'crimes_by_neighborhood.png')
-    calculate_avg_arrests_per_month(df, 'avg_arrests_per_month.xlsx')
 
 
 def prepare_acs_df(url=ACS):
@@ -296,13 +294,101 @@ def create_crime_zip_codes(crime_df):
     return merged_df
 
 
-def battery_reports(full_df):
+def calculate_chicago_stats(acs_df, output_file):
     '''
-    '''
+    Calculates descriptive statistics for 2017-2018 demographics in Chicago
+    at the zip_code level, including mean, min, 25%, 50%, 75%, and maximum
+    percent of people below the poverty line, median annual earnings, and
+    percent of people who are black.
 
+    Inputs:
+        acs_df (dataframe): ACS data
+        output_file (str): output filename
+    '''
+    chicago_zip_codes = pd.read_excel('chicago_zip_codes.xlsx')
+    chicago_data = pd.merge(chicago_zip_codes, acs_df, on=['zip_code'],
+                            how='left')
+    chicago_data.dropna()
+    summary = chicago_data.describe()[['percent_below_poverty_line',
+                                       'median_annual_earnings',
+                                       'percent_black']]
+    stats = summary.loc[['mean', 'min', '25%', '50%', '75%', 'max'],:].round(2)
+    stats.to_excel(output_file)
+
+
+def specific_crime_reports(full_df, output_file, crime_type):
+    '''
+    Calculates descriptive statistics at the zip code level among zip
+    codes where a specified type of crime took place, including mean, min,
+    25%, 50%, 75%, and maximum percent of people below the poverty line,
+    median annual earnings, and percent of people who are black.
+
+    Inputs:
+        full_df (dataframe): full Crime data joined with ACS data
+        output_file (str): output filename
+        crime_type (str): type of crime
+    '''
+    full_df_crime = full_df[full_df.primary_type == crime_type]
+    summary = full_df_crime.describe()[['percent_below_poverty_line',
+                                        'median_annual_earnings',
+                                        'percent_black']]
+    stats = summary.loc[['mean', 'min', '25%', '50%', '75%', 'max'],:].round(2)
+    stats.to_excel(output_file)
+
+
+def changes_in_crime_over_time(full_df, output_file, demographic, crime_type):
+    '''
+    Creates a line plot to demonstrate how average values for a specified
+    demographic change over time (by month) in locations where a specified
+    crime type was reported between 2017-2018. Line plots are constructed at
+    the zip code level to demonstrate trends.
+
+    Inputs:
+        full_df (dataframe): full Crime data joined with ACS data
+        output_file (str): output filename
+        demographic (str): ACS demographic (y-axis)
+        crimetype (str): type of crime to visualize
+    '''
+    full_df_crime = full_df[full_df.primary_type == crime_type]
+    summary = full_df_crime[['date', demographic]]
+    table = summary.groupby('date').mean()
     
+    plt.plot(table.index, table[demographic])
+    plt.suptitle('Demographics in Zip Codes where ' + crime_type + ' occurs: '
+                 + demographic)
+    plt.xlabel('date')
+    plt.ylabel(demographic)
+    plt.savefig(output_file, dpi=400)
+    plt.clf()
 
 
+def print_summary_tables_q2(acs_df, full_df):
+    '''
+    Print all summary tables for Question 2.
+
+    Input:
+        acs_df (dataframe): ACS data
+        full_df (dataframe): Crime data joined with ACS data on zip code
+    '''
+    calculate_chicago_stats(acs_df, 'chicago_stats.xlsx')
+    specific_crime_reports(full_df, 'battery_reports.xlsx', 'BATTERY')
+    specific_crime_reports(full_df, 'homicide_reports.xlsx', 'HOMICIDE')
+    changes_in_crime_over_time(full_df, 'battery_black_over_time.png',
+                               'percent_black', 'BATTERY')
+    changes_in_crime_over_time(full_df, 'battery_earnings_over_time.png',
+                               'median_annual_earnings', 'BATTERY')
+    changes_in_crime_over_time(full_df, 'battery_poverty_line_over_time.png',
+                               'percent_below_poverty_line', 'BATTERY')
+    changes_in_crime_over_time(full_df, 'homicide_black_over_time.png',
+                               'percent_black', 'HOMICIDE')
+    changes_in_crime_over_time(full_df, 'homicide_earnings_over_time.png',
+                               'median_annual_earnings', 'HOMICIDE')
+    changes_in_crime_over_time(full_df, 'homicide_poverty_line_over_time.png',
+                               'percent_below_poverty_line', 'HOMICIDE')
+    specific_crime_reports(full_df, 'deceptive_practice_reports.xlsx',
+                           'DECEPTIVE PRACTICE')
+    specific_crime_reports(full_df,
+                           'sex_offense_reports.xlsx', 'SEX OFFENSE')
 
 
 def go():
@@ -321,12 +407,14 @@ def go():
     names['community_area'] = names['community_area'].astype(float)
     df = pd.merge(df, names, on='community_area')
 
-    print_summary_tables(df)
+    print_summary_tables_q1(df)
 
     acs_df = prepare_acs_df()
     crime_df = create_crime_zip_codes(df)
     full_df = pd.merge(crime_df, acs_df, on='zip_code', how='left')
 
+    print_summarty_tables_q2(acs_df, full_df)
+    
 
 
 
