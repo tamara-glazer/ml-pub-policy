@@ -12,70 +12,90 @@ import matplotlib.pyplot as plt
 import xlsxwriter
 import requests
 from uszipcode import SearchEngine
+from pylab import savefig
 
 
-URL_2017 = 'https://data.cityofchicago.org/resource/6zsd-86xi.json?year=2017&$limit=600000'
-URL_2018 = 'https://data.cityofchicago.org/resource/6zsd-86xi.json?year=2018&$limit=600000'
-ACS = 'https://api.census.gov/data/2017/acs/acs5/?get=B01003_001E,B02001_003E,B15003_017E,B08121_001E,B07012_002E&for=zip code tabulation area:*'
+URL_2017 = 'https://data.cityofchicago.org/resource/' \
+           '6zsd-86xi.json?year=2017&$limit=600000'
+URL_2018 = 'https://data.cityofchicago.org/resource/' \
+           '6zsd-86xi.json?year=2018&$limit=600000'
+ACS = 'https://api.census.gov/data/2017/acs/acs5/' \
+'?get=B01003_001E,B02001_003E,B15003_017E,B08121_001E,B07012_002E&for=zip \
+code tabulation area:*'
 
 
-def load_one_year(URL):
+def load_one_year(url):
     '''
-    Uses the Socrata Open Data API (SODA) to retrieve data from the Chicago
-    Data Portal on crimes reported between 2017 and 2018 using a unique,
-    public app token. Converts JSON retrieved from API to a list of
-    dictonaries and then to a pandas DataFrame.
+    Uses an HTTP request library to retrieve data from the Chicago Data Portal
+    on crimes reported for a single year. Converts a request object to a JSON,
+    and finally to a pandast DataFrame.
 
     Inputs:
-        url (str): url for the City of Chicago Open Data Portal
-        token (str): public app token created for "tglazer_assignment1"
-        endpoint (str): endpoint details to direct the API
+        url (str): url from the City of Chicago Open Data Portal (single year)
 
     Output:
-        df (dataframe): a pandas dataframe containing data for 2017 and 2018
+        df (dataframe): a pandas dataframe containing data for a single year
     '''
-
-    request = requests.get(URL)
-    json = request_2017.json()
+    request = requests.get(url)
+    json = request.json()
     df = pd.DataFrame(json)
 
     return df
 
 
-def create_groups(df, level_1, level_2):
+def create_groups(df, x_level, y_level):
     '''
-    INSERT DOCSTRING
-    '''
+    Groups and collapses a dataframe to display the number of cases by any two
+    variables. The variable designated as y_level will appear along the y-axis
+    (rows) and the variable designated as x_level will appear along the x-axis
+    (columns).
 
-    groups = df.groupby([level_1, level_2], as_index=False).agg({'Case Number':
-                        'count'}).pivot(index=level_2, columns=level_1)\
-                        ['Case Number'].fillna(0).astype(int)
+    Inputs:
+        df (dataframe): the dataframe to collapse
+        x_level (str): name of the variable that will appear in columns
+        y_level (str): name of the variable that will appear in rows
+
+    Output:
+        groups (dataframe): a summary table presented as a DataFrame
+    '''
+    groups = df.groupby([x_level, y_level], as_index=False).agg({'case_number':
+                        'count'}).pivot(index=y_level, columns=x_level)\
+                        ['case_number'].fillna(0).astype(int)
+    groups.index.name = None
+
     return groups
 
 
 def summarize_crimes_by_type(df, output_file):
     '''
-    INSERT DOCSTRING
+    Creates a summary table of total number of reported cases by type (rows)
+    as well as by year (columns). Includes metrics for total and percent
+    change between 2017 and 2018.
+
+    Inputs:
+        df (dataframe): a pandas dataframe
+        output_file (str): output file name
     '''
 
-    crimes_by_type = create_groups(df, 'Year', 'Primary Type')
-    crimes_by_type.index.name = None
-    crimes_by_type['Total'] = crimes_by_type[2017] + crimes_by_type[2018]
-    crimes_by_type['Percent Change'] = crimes_by_type.pct_change\
-                                       (axis='columns')[2018].round(2)
+    crimes_by_type = create_groups(df, 'year', 'primary_type')
+    crimes_by_type['total'] = crimes_by_type['2017'] + crimes_by_type['2018']
+    crimes_by_type['percent_change'] = crimes_by_type.pct_change\
+                                       (axis='columns')['2018'].round(2)
     crimes_by_type.to_excel(output_file)
 
 
-def create_crime_heatmap(df):
+def create_crime_heatmap(df, output_file):
     '''
-    INSERT DOCSTRING
+    Creates a heatmap displaying number of reported cases by type (rows)
+    as well as by month/year (columns).
+
+    Inputs:
+        df (dataframe): a pandas dataframe
+        output_file (str): output file name
     '''
 
-    df_with_months = create_months(df)
-    crimes_by_month = create_groups(df_with_months, 'Month', 'Primary Type')
-    crimes_by_month.index.name = None
-    crimes_by_month.sortlevel(level=0, ascending=False, inplace=True)
-    sns.set(font_scale=0.5)
+    crimes_by_month = create_groups(df, 'month', 'primary_type')
+    crimes_by_month.sort_values('2017-01', ascending=False, inplace=True)
     heatmap = sns.heatmap(crimes_by_month,
                           cmap='Blues',
                           annot=True,
@@ -85,59 +105,116 @@ def create_crime_heatmap(df):
                           linewidths=0.5,
                           mask=(crimes_by_month == 0))
     heatmap.set_title('Number of Crimes by Month, 2017-2018')
-    plt.show(heatmap)
-    # should sort
+    figure = heatmap.get_figure()
+    figure.savefig('test.png', dpi=400)
+
 
 def summarize_crimes_by_month(df, output_file):
     '''
-    ADD DOCTSRING
+    Creates a summary table of total number of reported cases by month.
+
+    Inputs:
+        df (dataframe): a pandas dataframe
+        output_file (str): output file name
+    '''
+    monthly = df.groupby(['month'], as_index=False).agg({'case_number':
+                                                         'count'})
+    monthly.rename(columns={'case_number': 'number_of_cases'})
+    monthly.to_excel(output_file, index=False)
+
+
+def summarize_crimes_by_neighborhood(df, output_file):
+    '''
+    Creates a summary table of total number of cases and arrests reported by
+    neighborhood in 2017-2018. The table is sorted by total number of arrests.
+    
+    Inputs:
+        df (dataframe): a pandas dataframe
+        output_file (str): output file name
     '''
 
-    df_with_months = create_months(df)
-    df_with_months.groupby(['Month'], as_index=False).agg({'Case Number':
-                                                          'count'})
-    df_with_months.to_excel(output_file)
+    district = df.groupby(['neighborhood'], as_index=False).agg({'case_number':
+                          'count', 'arrest': 'sum'})
+    district['arrest'] = district['arrest'].astype(int)
+    district.sort_values('arrest', ascending=False, inplace=True)
+    district.to_excel(output_file, index=False)
 
 
-def summarize_crimes_by_community_area(df, output_file):
+def summarize_arrests_over_time(df, output_file):
     '''
-    ADD DOCSTRING
+    Produces a line plot of the running total of number of reported cases,
+    with one line representing cases that end in arrest and a second line
+    representing cases that do not end in arrest.
+
+    Inputs:
+        df (dataframe): a pandas dataframe
+        output_file (str): output file name
     '''
+    arrests_over_time = create_groups(df, 'arrest', 'date')
+    plot = arrests_over_time.sort_index().cumsum().plot()
+    plot.set_title('Running Total of Reported Cases by Arrest Status, 2017-2018')
+    figure = plot.get_figure()
+    figure.savefig('test.png', dpi=400)
 
-    df.groupby(['Community Area'], as_index=False).agg({'Case Number':
-               'count', 'Arrest': 'sum'}).astype(int).sort_values\
-               ('Community Area')
-    df.to_excel(output_file)
 
-
-def summarize_arrests_over_time(df):
+def create_crime_location_heatmap(df, output_file):
     '''
-    ADD DOCSTRING
+    Creates a heatmap displaying number of reported cases by neighborhood
+    (rows) as well as by type (columns).
+
+    Inputs:
+        df (dataframe): a pandas dataframe
+        output_file (str): output file name
     '''
+    type_by_neighborhood = create_groups(df, 'primary_type', 'neighborhood')
+    type_by_neighborhood.sort_values('THEFT', ascending=False, inplace=True)
+    heatmap = sns.heatmap(type_by_neighborhood,
+                          cmap='coolwarm',
+                          fmt='g',
+                          cbar=False,
+                          linewidths=0.5,
+                          center=2000,
+                          mask=(type_by_neighborhood == 0))
+    heatmap.set_title('Number of Crimes by Type and Neighborhood, 2017-2018')
+    figure = heatmap.get_figure()
+    figure.savefig('test.png', dpi=400)
 
-    arrests_over_time = create_groups(df, 'Arrest', 'Date')
-    arrests_over_time.sort_index().cumsum().plot()
-    sns.set(font_scale=0.5)
-    arrests_over_time.set_title('Number of Reported Crimes by Arrest Status, 2017-2018')
-    plt.show()
-    #Is this working right?
 
-    # more heatmaps by location???
-    # format the tables and put in a document
-
-def provide_summary_stats(df):
-    pass
-
-def more_community_area(df):
-    pass
-
-def generate_acs_variables(url=ACS):
+def calculate_avg_arrests_per_month(df, output_file):
     '''
-    1. B01003_001E = total population
-    2. B02001_003E = total number of black or African American residents (divide by total population)
-    3. B15003_017E = total number of people with a Regular high school diploma among those 25 years and older (divide by total population)
-    4. B08121_001E = Estimate!!Median earnings in the past 12 months!!Total",
-    5. B07012_002E = Estimate!!Total living in area 1 year ago!!Below 100 percent of the poverty level (divided by total population)
+    Creates a summary table of the average number of arrests by neighborhood,
+    per month, from 2017-2018. The table is sorted by avg. number of arrests.
+    
+    Inputs:
+        df (dataframe): a pandas dataframe
+        output_file (str): output file name
+    '''
+    groups = df.groupby(['neighborhood'], as_index=False).agg({'arrest': 'sum'})
+    groups.arrest = groups.arrest / 24
+    groups = groups.round(2).sort_values('arrest', ascending=False)
+    groups.index.name = None
+    groups.rename(columns={'arrest': 'avg_arrests'}, inplace=True)
+    groups.to_excel(output_file, index=False)
+
+
+def prepare_acs_df(url=ACS):
+    '''
+    Use a census API to retrieve data from the American Community Survey on
+    total population, percentage of black residents, percentage of residents
+    with a high school diploma, median annual earnings, and percentage of
+    residents below the poverty line, by zipcode.
+
+    B01003_001E = total population
+    B02001_003E = number of black residents
+    B15003_017E = number of people with a high school diploma
+    B08121_001E = median earnings in the past 12 months
+    B07012_002E = number of people (one year ago) below poverty line
+
+    Input:
+        url (str): url prepared for the census API to pull 5 variables
+
+    Output:
+        acs_df (dataframe): dataframe containing acs details by zipcode
     '''
     request_obj = requests.get(url)
     json = request_obj.json()
@@ -152,11 +229,10 @@ def generate_acs_variables(url=ACS):
                        'B07012_002E': 'num_below_poverty_line',
                        'zip code tabulation area': 'zip_code'}, inplace=True)
     df = df.apply(pd.to_numeric)
-    df['percent_black'] = df.num_black_residents /\
-                                    df.total_population
+    df['percent_black'] = df.num_black / df.total_population
     df['percent_hs_diploma'] = df.num_over_25_with_hs_diploma /\
                                         df.total_population
-    df['percent_below_poverty_line'] = df.tnum_below_poverty_line /\
+    df['percent_below_poverty_line'] = df.num_below_poverty_line /\
                                        df.total_population
     df.drop(columns=['num_black', 'num_over_25_with_hs_diploma',\
                      'num_below_poverty_line'], inplace=True)
@@ -166,10 +242,12 @@ def generate_acs_variables(url=ACS):
 
     return acs_df
 
+
 def create_crime_zip_codes(crime_df):
     '''
     DOC STRING - convert blocks to zip codes to join in census data
     '''
+    truncated = df.drop_duplicates(subset=['latitude', 'longitude', 'block']) 
     search = SearchEngine(simple_zipcode=True)
     crime_df['zip_code'] = crime_df.apply(lambda x:\
                                           search.by_coordinates(x.Latitude,
@@ -183,15 +261,35 @@ def join_acs_to_crime(crime_df, acs_df):
     full_df = pd.merge(crime_df, acs_df, on='zip_code', how='left')
 
 def go():
+    '''
+    DOC STRING
+    '''
 
     crime_2017 = load_one_year(URL_2017)
     crime_2018 = load_one_year(URL_2018)
     df = crime_2017.append(crime_2018)
-    df['Date'] = df.Date.astype('datetime64[M]')
-    df['Month'] = df.Date.dt.to_period('M')
+    df['date'] = df.date.astype('datetime64[M]')
+    df['month'] = df.date.dt.to_period('M')
 
-    summarize_crimes_by_type(crime_df, 'crimes_by_type.xlsx')
-    reate_crime_heatmap(crime_df)
+    names = pd.read_csv('community_area_names.csv')
+    df['community_area'] = pd.to_numeric(df['community_area'], errors='coerce')
+    names['community_area'] = names['community_area'].astype(float)
+    df = pd.merge(df, names, on='community_area')
+
+    sns.set(font_scale=0.5)
+    summarize_crimes_by_type(df, 'crimes_by_type.xlsx')
+    create_crime_heatmap(df, 'crime_heatmap.png')
+    summarize_crimes_by_month(df, 'crime_total_by_month.xlsx')
+    summarize_crimes_by_neighborhood(df, 'crime_and_arrest_total_by_neighborhood.xlsx')
+    summarize_arrests_over_time(df, 'running_total_cases.png')
+    create_crime_location_heatmap(df, 'crimes_by_neighborhood.png')
+    calculate_avg_arrests_per_month(df, 'avg_arrests_per_month.xlsx')
+
+    acs_df = prepare_acs_df()
+    crime_zips_small = create_crime_zip_codes(df)
+
+
+
 
 
 
