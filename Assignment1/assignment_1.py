@@ -1,6 +1,8 @@
 '''
 DESCRIPTION
 
+ ##remove slice warning##
+
 Author: Tammy Glazer
 '''
 
@@ -197,6 +199,24 @@ def calculate_avg_arrests_per_month(df, output_file):
     groups.to_excel(output_file, index=False)
 
 
+def print_summary_tables(df):
+    '''
+    Print all summary tables and graphs.
+
+    Input:
+        df (dataframe): crimes dataframe
+    '''
+
+    sns.set(font_scale=0.5)
+    summarize_crimes_by_type(df, 'crimes_by_type.xlsx')
+    create_crime_heatmap(df, 'crime_heatmap.png')
+    summarize_crimes_by_month(df, 'crime_total_by_month.xlsx')
+    summarize_crimes_by_neighborhood(df, 'crime_and_arrest_total_by_neighborhood.xlsx')
+    summarize_arrests_over_time(df, 'running_total_cases.png')
+    create_crime_location_heatmap(df, 'crimes_by_neighborhood.png')
+    calculate_avg_arrests_per_month(df, 'avg_arrests_per_month.xlsx')
+
+
 def prepare_acs_df(url=ACS):
     '''
     Use a census API to retrieve data from the American Community Survey on
@@ -245,20 +265,33 @@ def prepare_acs_df(url=ACS):
 
 def create_crime_zip_codes(crime_df):
     '''
-    DOC STRING - convert blocks to zip codes to join in census data
+    Use the uszipcode library to identify a zip code for each unique
+    pair of latitude and longitude coordinates in the Crime Dataset.
+    Merge zip code information back into the Crime Dataset to later join with
+    ACS data.
+
+    Input:
+        crime_df (dataframe): original crime dataframe
+
+    Output:
+        crime_df (dataframe): new crime dataframe including zip codes
     '''
-    truncated = df.drop_duplicates(subset=['latitude', 'longitude', 'block']) 
+    truncated = crime_df.drop_duplicates(subset=['latitude', 'longitude',
+                                                 'block'])
+    truncated = truncated[['block', 'latitude', 'longitude']]
+    truncated = truncated.dropna()
+    truncated.loc[:,'latitude'] = truncated.latitude.astype(float)
+    truncated.loc[:,'longitude'] = truncated.longitude.astype(float)
     search = SearchEngine(simple_zipcode=True)
-    crime_df['zip_code'] = crime_df.apply(lambda x:\
-                                          search.by_coordinates(x.Latitude,
-                                          x.Longitude)[0].zipcode, axis=1)
+    truncated['zip_code'] = truncated.apply(lambda x:
+                                            search.by_coordinates(x['latitude'],
+                                            x['longitude'])[0].zipcode, axis=1)
+    truncated = truncated[['latitude', 'longitude', 'zip_code']]
+    crime_df = crime_df.merge(crime_df, truncated, on=['latitude',
+                                                       'longitude'])
+
     return crime_df
 
-def join_acs_to_crime(crime_df, acs_df):
-    '''
-    DOC STRING
-    '''
-    full_df = pd.merge(crime_df, acs_df, on='zip_code', how='left')
 
 def go():
     '''
@@ -276,17 +309,13 @@ def go():
     names['community_area'] = names['community_area'].astype(float)
     df = pd.merge(df, names, on='community_area')
 
-    sns.set(font_scale=0.5)
-    summarize_crimes_by_type(df, 'crimes_by_type.xlsx')
-    create_crime_heatmap(df, 'crime_heatmap.png')
-    summarize_crimes_by_month(df, 'crime_total_by_month.xlsx')
-    summarize_crimes_by_neighborhood(df, 'crime_and_arrest_total_by_neighborhood.xlsx')
-    summarize_arrests_over_time(df, 'running_total_cases.png')
-    create_crime_location_heatmap(df, 'crimes_by_neighborhood.png')
-    calculate_avg_arrests_per_month(df, 'avg_arrests_per_month.xlsx')
+    print_summary_tables(df)
 
     acs_df = prepare_acs_df()
-    crime_zips_small = create_crime_zip_codes(df)
+    crime_df = create_crime_zip_codes(df)
+    pd.merge(crime_df, acs_df, on='zip_code', how='left')
+
+    #going to want to drop rows with missing data for lat/lon in df
 
 
 
