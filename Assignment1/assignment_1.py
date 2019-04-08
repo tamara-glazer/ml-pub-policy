@@ -83,6 +83,7 @@ def summarize_crimes_by_type(df, output_file):
     crimes_by_type['total'] = crimes_by_type['2017'] + crimes_by_type['2018']
     crimes_by_type['percent_change'] = crimes_by_type.pct_change\
                                        (axis='columns')['2018'].round(2)
+    crimes_by_type.sort_values('total', ascending=False, inplace=True)
     crimes_by_type.to_excel(output_file)
 
 
@@ -156,7 +157,7 @@ def summarize_arrests_over_time(df, output_file):
     plot = arrests_over_time.sort_index().cumsum().plot()
     plot.set_title('Running Total of Reported Cases by Arrest Status, 2017-2018')
     figure = plot.get_figure()
-    figure.savefig('test.png', dpi=400)
+    figure.savefig(output_file, dpi=400)
 
 
 def create_crime_location_heatmap(df, output_file):
@@ -179,7 +180,7 @@ def create_crime_location_heatmap(df, output_file):
                           mask=(type_by_neighborhood == 0))
     heatmap.set_title('Number of Crimes by Type and Neighborhood, 2017-2018')
     figure = heatmap.get_figure()
-    figure.savefig('test.png', dpi=400)
+    figure.savefig(output_file, dpi=400)
 
 
 def calculate_avg_arrests_per_month(df, output_file):
@@ -259,6 +260,7 @@ def prepare_acs_df(url=ACS):
     acs_df = df[['zip_code', 'total_population', 'median_annual_earnings',\
                  'percent_black', 'percent_hs_diploma',\
                  'percent_below_poverty_line']]
+    acs_df.loc[:,'zip_code'] = acs_df.astype({'zip_code': float})
 
     return acs_df
 
@@ -267,7 +269,7 @@ def create_crime_zip_codes(crime_df):
     '''
     Use the uszipcode library to identify a zip code for each unique
     pair of latitude and longitude coordinates in the Crime Dataset.
-    Merge zip code information back into the Crime Dataset to later join with
+    Merges zip code information back into the Crime Dataset to later join with
     ACS data.
 
     Input:
@@ -276,21 +278,31 @@ def create_crime_zip_codes(crime_df):
     Output:
         crime_df (dataframe): new crime dataframe including zip codes
     '''
+    crime_df.loc[:,'latitude'] = truncated.latitude.astype(float)
+    crime_df.loc[:,'longitude'] = truncated.longitude.astype(float)
     truncated = crime_df.drop_duplicates(subset=['latitude', 'longitude',
                                                  'block'])
     truncated = truncated[['block', 'latitude', 'longitude']]
     truncated = truncated.dropna()
-    truncated.loc[:,'latitude'] = truncated.latitude.astype(float)
-    truncated.loc[:,'longitude'] = truncated.longitude.astype(float)
     search = SearchEngine(simple_zipcode=True)
     truncated['zip_code'] = truncated.apply(lambda x:
                                             search.by_coordinates(x['latitude'],
                                             x['longitude'])[0].zipcode, axis=1)
-    truncated = truncated[['latitude', 'longitude', 'zip_code']]
-    crime_df = crime_df.merge(crime_df, truncated, on=['latitude',
-                                                       'longitude'])
+    merged_df = pd.merge(crime_df, truncated, on=['block', 'latitude',\
+                                                  'longitude'], how='left')
+    merged_df.loc[:, 'zip_code'] = pd.to_numeric(merged_df['zip_code'],
+                                                 errors='coerce')
 
-    return crime_df
+    return merged_df
+
+
+def battery_reports(full_df):
+    '''
+    '''
+
+    
+
+
 
 
 def go():
@@ -313,9 +325,9 @@ def go():
 
     acs_df = prepare_acs_df()
     crime_df = create_crime_zip_codes(df)
-    pd.merge(crime_df, acs_df, on='zip_code', how='left')
+    full_df = pd.merge(crime_df, acs_df, on='zip_code', how='left')
 
-    #going to want to drop rows with missing data for lat/lon in df
+
 
 
 
