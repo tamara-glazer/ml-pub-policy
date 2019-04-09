@@ -37,9 +37,7 @@ An API is also leveraged to download data from the American Community Survey
 using the following URL for which a list of variables of interest can be
 selected using the global variable DEMOGRAPHICS (currently set to B01003_001E,
 B02001_003E, B15003_017E, B08121_001E, and B07012_002E):
-[ACS Demographic Data]('https://api.census.gov/data/2017/acs/acs5/
-?get=B01003_001E,B02001_003E,B15003_017E,B08121_001E,B07012_002E
-&for=zip%20code%20tabulation%20area:*')
+[ACS Demographic Data]('https://api.census.gov/data/2017/acs/acs5/?get=B01003_001E,B02001_003E,B15003_017E,B08121_001E,B07012_002E&for=zip%20code%20tabulation%20area:*')
 
 A CSV is included containing a list of zip codes in the Chicago Metropolitan
 Area (chicago_zip_codes.csv). A CSV is also included that maps community area
@@ -51,7 +49,10 @@ The final writeup, including all tables and images, is included as a PDF in
 the repository (glazer_writeup.pdf). This file was also submitted on Canvas.
 
 ## Usage
-The script can be run from the command line or from within ipython3.
+The script can be run from the command line or from within ipython3. As the
+script runs, several tables will be exported to the current directory as
+PNG and Excel files. These tables and images are included directly
+in the final writeup.
 
 Command line:
 

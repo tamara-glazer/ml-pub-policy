@@ -542,8 +542,8 @@ def full_analysis(timeframe=DATA_YEARS):
     full_df = pd.merge(crime_df, acs_df, on='zip_code', how='left')
 
     print_summary_tables_q2(acs_df, full_df)
-    print_summary_tables_q3(df)
-    print_summary_tables_q4(df)
+    print_summary_tables_q3(full_df)
+    print_summary_tables_q4(full_df)
 
 
 if __name__ == "__main__":
