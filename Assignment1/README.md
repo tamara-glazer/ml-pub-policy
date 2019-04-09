@@ -34,9 +34,9 @@ the global variable DATA_YEARS (currently set to 2017 and 2018):
 [2018 Chicago Crime Report](https://data.cityofchicago.org/resource/6zsd-86xi.json?year=2018&$limit=600000)
 
 An API is also leveraged to download data from the American Community Survey
-using the following URL for which a list of variables of interest can be
-selected using the global variable DEMOGRAPHICS (currently set to B01003_001E,
-B02001_003E, B15003_017E, B08121_001E, and B07012_002E).
+for which a list of variables of interest can be selected using the global
+variable DEMOGRAPHICS (currently set to B01003_001E, B02001_003E, B15003_017E,
+B08121_001E, and B07012_002E).
 
 A CSV is included containing a list of zip codes in the Chicago Metropolitan
 Area (chicago_zip_codes.csv). A CSV is also included that maps community area
