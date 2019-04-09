@@ -2,30 +2,21 @@
 Assignment 1: Data analysis on 2017-2018 Crime Reports in Chicago from the
 Chicago Open Data Portal joined with ACS demographic data
 
-How to Use: run the function full_analysis() in ipython3
-
 Author: Tammy Glazer
 '''
-import re
-import numpy as np
 import pandas as pd
-from sodapy import Socrata
 import seaborn as sns
 import matplotlib.pyplot as plt
 import requests
 from uszipcode import SearchEngine
 
 
-URL_2017 = 'https://data.cityofchicago.org/resource/' \
-           '6zsd-86xi.json?year=2017&$limit=600000'
-URL_2018 = 'https://data.cityofchicago.org/resource/' \
-           '6zsd-86xi.json?year=2018&$limit=600000'
-ACS = 'https://api.census.gov/data/2017/acs/acs5/' \
-'?get=B01003_001E,B02001_003E,B15003_017E,B08121_001E,B07012_002E&for=zip \
-code tabulation area:*'
+DATA_YEARS = [2017, 2018]
+DEMOGRAPHICS = ['B01003_001E', 'B02001_003E', 'B15003_017E', 'B08121_001E',
+                'B07012_002E']
 
 
-def load_one_year(url):
+def load_one_year(year):
     '''
     Uses an HTTP request library to retrieve data from the Chicago Data Portal
     on crimes reported for a single year. Converts a request object to a JSON,
@@ -37,6 +28,8 @@ def load_one_year(url):
     Output:
         df (dataframe): a pandas dataframe containing data for a single year
     '''
+    url = 'https://data.cityofchicago.org/resource/6zsd-86xi.json?year='\
+          + str(year) + '&$limit=600000'
     request = requests.get(url)
     json = request.json()
     df = pd.DataFrame(json)
@@ -208,9 +201,9 @@ def print_summary_tables_q1(df):
     create_crime_location_heatmap(df, 'crimes_by_neighborhood.png')
     plt.clf()
     summarize_arrests_over_time(df, 'running_total_cases.png')
-    
 
-def prepare_acs_df(url=ACS):
+
+def prepare_acs_df(demographics=DEMOGRAPHICS):
     '''
     Use an API to retrieve data from the American Community Survey on
     total population, percentage of black residents, percentage of residents
@@ -229,6 +222,9 @@ def prepare_acs_df(url=ACS):
     Output:
         acs_df (dataframe): dataframe containing ACS details by zipcode
     '''
+    variables = ",".join(demographics)
+    url = 'https://api.census.gov/data/2017/acs/acs5/?get=' + variables\
+           + '&for=zip code tabulation area:*'
     request_obj = requests.get(url)
     json = request_obj.json()
     df = pd.DataFrame(json)
@@ -274,9 +270,8 @@ def create_crime_zip_codes(crime_df):
     '''
     crime_df.loc[:, 'latitude'] = crime_df.latitude.astype(float)
     crime_df.loc[:, 'longitude'] = crime_df.longitude.astype(float)
-    truncated = crime_df.drop_duplicates(subset=['latitude', 'longitude',
-                                                 'block'])
-    truncated = truncated[['block', 'latitude', 'longitude']]
+    truncated = crime_df[['block', 'latitude',\
+                         'longitude']].drop_duplicates(subset=['block'])
     truncated = truncated.dropna()
     search = SearchEngine(simple_zipcode=True)
     truncated['zip_code'] = truncated.apply(lambda x:
@@ -301,7 +296,7 @@ def calculate_chicago_stats(acs_df, output_file):
         acs_df (dataframe): ACS data
         output_file (str): output filename
     '''
-    chicago_zip_codes = pd.read_excel('chicago_zip_codes.xlsx')
+    chicago_zip_codes = pd.read_csv('chicago_zip_codes.csv')
     chicago_data = pd.merge(chicago_zip_codes, acs_df, on=['zip_code'],
                             how='left')
     chicago_data.dropna()
@@ -328,7 +323,8 @@ def specific_crime_reports(full_df, output_file, crime_type):
     summary = full_df_crime.describe()[['percent_below_poverty_line',
                                         'median_annual_earnings',
                                         'percent_black']]
-    stats = summary.loc[['mean', 'min', '25%', '50%', '75%', 'max'],:].round(2)
+    stats = summary.loc[['mean', 'min', '25%', '50%', '75%', 'max'],\
+                        :].round(2)
     stats.to_excel(output_file)
 
 
@@ -414,7 +410,7 @@ def calculate_q3_part_1(full_df):
     battery_earnings = summary_3.groupby('year').mean()
 
 
-def calculate_YOY_comparison(full_df, output_file):
+def calculate_yoy_comparison(full_df, output_file):
     '''
     Compute how crime has changed between 2017 and 2017 in Chicago over the
     same 28 day period (June 28th to July 25th).
@@ -435,7 +431,7 @@ def calculate_YOY_comparison(full_df, output_file):
     table.to_excel(output_file)
 
 
-def calculate_YTD_comparison(full_df, output_file):
+def calculate_ytd_comparison(full_df, output_file):
     '''
     Compute how crime has changed between 2017 and 2018 in Chicago over the
     same year-to-date period (June 1st to July 25th).
@@ -446,9 +442,9 @@ def calculate_YTD_comparison(full_df, output_file):
     '''
     full_df['date'] = pd.to_datetime(full_df['date'])
     truncated_2017 = full_df[(full_df['date'] >= '2017-1-1') & (full_df['date']
-                                                               <= '2017-7-25')]
+                                                                <= '2017-7-25')]
     truncated_2018 = full_df[(full_df['date'] >= '2018-1-1') & (full_df['date']
-                                                               <= '2018-7-25')]
+                                                                <= '2018-7-25')]
     df_limited = truncated_2017.append(truncated_2018)
     table = create_groups(df_limited, 'year', 'primary_type')
     table = table.append(pd.Series(table.sum(), name='TOTAL'))
@@ -463,8 +459,8 @@ def print_summary_tables_q3(df):
     Input:
         df (dataframe): crimes dataframe
     '''
-    calculate_YOY_comparison(df, 'YOY_comparison.xlsx')
-    calculate_YTD_comparison(df, 'YTD_comparison.xlsx')
+    calculate_yoy_comparison(df, 'YOY_comparison.xlsx')
+    calculate_ytd_comparison(df, 'YTD_comparison.xlsx')
 
 
 def calculate_crime_probability(df, output_file):
@@ -517,7 +513,7 @@ def print_summary_tables_q4(df):
     calculate_call_likelihood(df, 'call_likelihood.xlsx')
 
 
-def full_analysis():
+def full_analysis(timeframe=DATA_YEARS):
     '''
     Conducts the complete analysis, including downloading reported crime data
     from the Chicago Open Data Portal for 2017 and 2018, generating summary
@@ -527,9 +523,9 @@ def full_analysis():
     and conducing analysis on this augmented dataset (summary_tables_q2,
     summary_tables_q3, summary_tables_q4).
     '''
-    crime_2017 = load_one_year(URL_2017)
-    crime_2018 = load_one_year(URL_2018)
-    df = crime_2017.append(crime_2018)
+    crime_year_1 = load_one_year(timeframe[0])
+    crime_year_2 = load_one_year(timeframe[1])
+    df = crime_year_1.append(crime_year_2)
     df['date'] = df.date.astype('datetime64[M]')
     df['month'] = df.date.dt.to_period('M')
 
@@ -542,10 +538,13 @@ def full_analysis():
     print_summary_tables_q1(df)
 
     acs_df = prepare_acs_df()
-    # Note: the below call can take time (uszipcode generation)
-    crime_df = create_crime_zip_codes(df) 
+    crime_df = create_crime_zip_codes(df)
     full_df = pd.merge(crime_df, acs_df, on='zip_code', how='left')
 
     print_summary_tables_q2(acs_df, full_df)
     print_summary_tables_q3(df)
     print_summary_tables_q4(df)
+
+
+if __name__ == "__main__":
+    full_analysis()
