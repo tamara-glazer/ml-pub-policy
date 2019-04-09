@@ -8,6 +8,7 @@ Author: Tammy Glazer
 
 import numpy as np
 import pandas as pd
+import re
 from sodapy import Socrata
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -78,7 +79,6 @@ def summarize_crimes_by_type(df, output_file):
         df (dataframe): a pandas dataframe
         output_file (str): output file name
     '''
-
     crimes_by_type = create_groups(df, 'year', 'primary_type')
     crimes_by_type['total'] = crimes_by_type['2017'] + crimes_by_type['2018']
     crimes_by_type['percent_change'] = crimes_by_type.pct_change\
@@ -96,7 +96,6 @@ def create_crime_heatmap(df, output_file):
         df (dataframe): a pandas dataframe
         output_file (str): output file name
     '''
-
     crimes_by_month = create_groups(df, 'month', 'primary_type')
     crimes_by_month.sort_values('2017-01', ascending=False, inplace=True)
     heatmap = sns.heatmap(crimes_by_month,
@@ -205,8 +204,6 @@ def print_summary_tables_q1(df):
     Input:
         df (dataframe): crimes dataframe
     '''
-
-    sns.set(font_scale=0.5)
     summarize_crimes_by_type(df, 'crimes_by_type.xlsx')
     create_crime_heatmap(df, 'crime_heatmap.png')
     summarize_crimes_by_month(df, 'crimes_by_month.xlsx')
@@ -391,11 +388,139 @@ def print_summary_tables_q2(acs_df, full_df):
                            'sex_offense_reports.xlsx', 'SEX OFFENSE')
 
 
-def go():
+def calculate_q3_part_1(full_df):
     '''
-    DOC STRING
-    '''
+    Compute metrics on how crime has changed in Chicago from 2017 to 2018.
+    Note that these metrics are not exported to an output file.
 
+    Input:
+        full_df (dataframe): full dataframe
+    '''
+    change_over_time = full_df.groupby('year').agg({'case_number': 'count',
+                                                    'arrest': 'sum'})
+    change_over_time['percent_crime_arrest'] = (change_over_time.arrest /
+                                               change_over_time.case_number)
+    full_df_battery = full_df[full_df.primary_type == battery]
+    summary_1 = full_df_battery[['year', 'percent_below_poverty_line']]
+    battery_poverty_line = summary1.groupby('year').mean()   
+    summary_2 = full_df_battery[['year', 'percent_black']]
+    battery_percent_black = summary2.groupby('year').mean()
+    summary_3 = full_df_battery[['year', 'median_annual_earnings']]
+    battery_earnings = summary3.groupby('year').mean() 
+
+
+def calculate_YOY_comparison(full_df, output_file):
+    '''
+    Compute how crime has changed between 2017 and 2017 in Chicago over the
+    same 28 day period (June 28th to July 25th).
+
+    Inputs:
+        full_df (dataframe): full dataframe
+        output_file (str): output filename
+    '''
+    full_df['date'] = pd.to_datetime(full_df['date'])
+    truncated_2017 = full_df[(full_df['date'] >= '2017-6-28') & (full_df['date']
+                                                                <= '2017-7-25')]
+    truncated_2018 = full_df[(full_df['date'] >= '2018-6-28') & (full_df['date']
+                                                                <= '2018-7-25')]
+    df_limited = truncated_2017.append(truncated_2018)
+    table = create_groups(df_limited, 'year', 'primary_type')
+    table = table.append(pd.Series(table.sum(), name='TOTAL'))
+    table['percent_change'] = table.pct_change(axis='columns')['2018'].round(2)
+    table.to_excel(output_file)
+
+
+def calculate_YTD_comparison(full_df, output_file):
+    '''
+    Compute how crime has changed between 2017 and 2017 in Chicago over the
+    same year-to-date period (June 1st to July 25th).
+
+    Inputs:
+        full_df (dataframe): full dataframe
+        output_file (str): output filename
+    '''
+    full_df['date'] = pd.to_datetime(full_df['date'])
+    truncated_2017 = full_df[(full_df['date'] >= '2017-1-1') & (full_df['date']
+                                                               <= '2017-7-25')]
+    truncated_2018 = full_df[(full_df['date'] >= '2018-1-1') & (full_df['date']
+                                                               <= '2018-7-25')]
+    table = create_groups(df_limited, 'year', 'primary_type')
+    table = table.append(pd.Series(table.sum(), name='TOTAL'))
+    table['percent_change'] = table.pct_change(axis='columns')['2018'].round(2)
+    table.to_excel(output_file)
+
+
+def print_summary_tables_q3(df):
+    '''
+    Print all summary tables for Question 3.
+
+    Input:
+        df (dataframe): crimes dataframe
+    '''
+    calculate_YOY_comparison(df, 'YOY_comparison.xlsx')
+    calculate_YTD_comparison(df, 'YTD_comparison.xlsx')
+
+
+def calculate_crime_probability(df, output_file):
+    '''
+    Calculate the most likely crime type given a call comes from 2111
+    S Michigan Avenue along with the probabilities of each type of request.
+
+    Inputs:
+        df (dataframe): crime dataframe
+        output_file (str): output file
+    '''
+    df.block = df.block.astype(str)
+    df["correct_blocks"] = df['block'].str.contains('S\sMICHIGAN\sAVE',
+                                                    regex=True)
+    df = df.drop(df[df.correct_blocks == False].index)
+    likely = df.groupby(['primary_type'], as_index=False).agg({'case_number':
+                        'count'}).sort_values('case_number', ascending=False)
+    total = likely.case_number.sum()
+    likely['probability'] = (likely['case_number'] / total).round(3)
+    likely.rename(columns={'case_number': 'number_of_cases'}, inplace=True)
+    likely.to_excel(output_file, index=False)
+
+
+def calculate_call_likelihood(df, output_file):
+    '''
+    Calculates the likelihood that a call about Theft is coming from Garfield
+    Park vs. Uptown
+
+    Inputs:
+        df (dataframe): crime dataframe
+        output_file (str): output file
+    '''
+    groups = create_groups(df, 'primary_type', 'neighborhood')
+    groups = groups[['THEFT']].sort_values('THEFT', ascending=False)
+    total = groups.THEFT.sum()
+    groups = groups.loc[['West Garfield Park', 'East Garfield Park', 'Uptown']]
+    groups['probability'] = groups.THEFT / total
+    groups.sort_values('probability', ascending=False, inplace=True)
+    groups.to_excel(output_file, index=False)
+
+
+def print_summary_tables_q4(df):
+    '''
+    Print all summary tables for Question 4.
+
+    Input:
+        df (dataframe): crimes dataframe
+    '''
+    calculate_crime_probability(df, 'crime_probability.xlsx')
+    calculate_call_likelihood(df, 'calculate_call_likelihood.xlsx')
+
+
+def complete_analysis():
+    '''
+    Conducts the complete analysis, including downloading reported crime data
+    from the Chicago Open Data Portal for 2017 and 2018, generating summary
+    statistics for the crime reports (summary_tables_q1), joining in data
+    containing neighborhood names, generating zip codes based on lat/long
+    information in the crime dataset and joining ACS data on zip code,
+    and conducing analysis on this augmented dataset (summary_tables_q2,
+    summary_tables_q3, summary_tables_q4).
+    '''
     crime_2017 = load_one_year(URL_2017)
     crime_2018 = load_one_year(URL_2018)
     df = crime_2017.append(crime_2018)
@@ -407,47 +532,13 @@ def go():
     names['community_area'] = names['community_area'].astype(float)
     df = pd.merge(df, names, on='community_area')
 
+    sns.set(font_scale=0.5)
     print_summary_tables_q1(df)
 
     acs_df = prepare_acs_df()
     crime_df = create_crime_zip_codes(df)
     full_df = pd.merge(crime_df, acs_df, on='zip_code', how='left')
 
-    print_summarty_tables_q2(acs_df, full_df)
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    print_summary_tables_q2(acs_df, full_df)
+    print_summary_tables_q3(df)
+    print_summary_tables_q4(df)
