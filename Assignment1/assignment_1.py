@@ -1,6 +1,6 @@
 '''
 Assignment 1: Data analysis on 2017-2018 Crime Reports in Chicago from the
-Chicago Open Data Portal joined with ACS demographic data
+Chicago Open Data Portal joined with ACS demographic data.
 
 Author: Tammy Glazer
 '''
