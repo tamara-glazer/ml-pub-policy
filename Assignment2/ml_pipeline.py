@@ -1,11 +1,11 @@
 '''
 Machine Learning Pipeline
-1. Read/Load Data
-2. Explore Data
-3. Pre-Process and Clean Data
-4. Generate Features/Predictors
-5. Build Machine Learning Classifier
-6. Evaluate Classifier
+1. Read/Load Data (CSV)
+2. Explore Data (print statements, tables, and graphs)
+3. Pre-Process and Clean Data (adjust missing values)
+4. Generate Features/Predictors (discretizes and creates dummies)
+5. Build Machine Learning Classifier (Decision Tree class)
+6. Evaluate Classifier (Accuracy score)
 
 Author: Tammy Glazer
 '''
@@ -14,6 +14,10 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
+import graphviz
+from sklearn import tree
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
 
 
 # Raw data CSV filename
@@ -35,6 +39,20 @@ CATEGORICAL_VAR = 'NumberOfDependents'
 CONTINUOUS_VAR = 'DebtRatio'
 # Specify a NUMERIC attribute to print a list of outliers for that attribute
 OUTLIER = 'age'
+# Specify a continuous feature to discretize
+FEATURE = 'age'
+# Specify bins as inclusive integer tuples to discretize the above variable.
+# Alternatively, BINS can be set to an integer. Comment out option not is use.
+BINS = pd.IntervalIndex.from_tuples([(20, 39), (40, 69), (70, 110)],
+                                    closed='both')
+#BINS = 5
+# Specify labels for discrete bins or leave list empty for default label
+LABEL = []
+# Specify a feature to create dummies from
+DUMMIES = 'zipcode'
+# Specify test size (train-test-split) and random state (seed)
+TEST_SIZE = 0.2
+RANDOM_STATE = 1
 
 
 # Set filenames to print tables/graphs/plots
@@ -47,6 +65,7 @@ HISTOGRAM = 'histogram.png'
 SCATTERPLOT = 'correlation.png'
 HEATMAP = 'heatmap.png'
 BARPLOT = 'barplot.png'
+TREE = 'tree.png'
 
 
 def read_data(file=RAW_DATA):
@@ -202,7 +221,8 @@ def create_heatmap(df, comparison=TWO_CATEGORICAL, file_1=HEATMAP):
     plt.close()
 
 
-def create_barplot(df, cat=CATEGORICAL_VAR, con=CONTINUOUS_VAR, file_1=BARPLOT):
+def create_barplot(df, cat=CATEGORICAL_VAR, con=CONTINUOUS_VAR,
+                   file_1=BARPLOT):
     '''
     Visualize the relationship between a categorical variable and the average
     of a continuous variable through a barplot where x=categorical and
@@ -248,16 +268,192 @@ def find_outliers(df, outlier=OUTLIER):
     print(out)
 
 
-
-
-
-
-
-def go():
+def pre_process(df):
     '''
-    df = read_data
-    XXX = calculate_distributions(df)
-    XXX = examine_correlations(df)
+    For each column, fills in missing values with the mean value for the
+    column. Note that this function can be applied to numeric columns only.
+
+    Input:
+        df (dataframe): a pandas dataframe
+
+    Output:
+        df (dataframe): an updated pandas dataframe
     '''
+    for col in df.columns:
+        df[col].fillna(df[col].mean(), inplace=True)
+
+    return df
 
 
+def discretize_continuous_variable(df, feature=FEATURE, bins=BINS, label=LABEL):
+    '''
+    Creates a new column in the dataframe containing a categorical variable
+    to represent a specified continuous variable. Bins can be set automatically
+    or manually.
+
+    Inputs:
+        df (dataframe): a pandas dataframe
+        feature (str): the name of a continuous variable
+        bins (int or pandas function): the bin size (set automatically or
+                                                     manually)
+        label (list): a list of labels (optional)
+
+    Return:
+        df (dataframe): dataframe with a new, discretized column
+    '''
+    if label:
+        df[feature + '_bins'] = pd.cut(df[feature], bins=bins, labels=label)
+    else:
+        df[feature + '_bins'] = pd.cut(df[feature], bins=bins)
+
+    return df
+
+
+def create_dummies(df, feature=DUMMIES):
+    '''
+    Takes a categorical variable and creates dummy variables from it,
+    which are concatenated to the end of the dataframe. Dummy headers will
+    contain a prefix of up to 3 characters from the original variable
+    name
+
+    Inputs:
+        df (dataframe): a pandas dataframe
+        feature (str): a variable name
+    
+    Output:
+        df (dataframe): dataframe with new dummy variable columns
+    '''
+    dummies = pd.get_dummies(df[feature], prefix=feature[:3])
+    df = pd.concat([df, dummies], axis=1)
+
+    return df
+
+
+class Classifier:
+    '''
+    Class for representing a decision tree classifier
+
+    Attributes:
+        x_data (dataframe): a dataframe containing all features
+        y_data (dataframe): a dataframe containing the target variable
+        x_train (dataframe): a dataframe containing the training features
+        y_train (dataframe): a dataframe containing the training target
+        x_test (dataframe): a dataframe containing the testing features
+        y_test (dataframe): a dataframe containing the testing target
+        trained_model (obj): decision tree trained on the training data
+        y_hat (array): an array of predicted outcomes for the x_test dataframe
+        accuracy (float): the prediction accuracy score
+        predictor_set_size (int): number of features used to predict
+    '''
+    def __init__(self, df):
+        self.x_data = self.create_x(df)
+        self.y_data = self.create_y(df)
+        self.x_train = None
+        self.y_train = None
+        self.x_test = None
+        self.y_test = None
+        self.trained_model = None
+        self.train()
+        self.y_hat = self.predict()
+
+
+    def create_x(self, df):
+        '''
+        Creates a dataframe of all features to be used as predictors
+
+        Input:
+            df (dataframe): cleaned dataframe (containing categorical vars)
+
+        Output:
+            df (dataframe): features dataframe
+        '''
+        features = df.iloc[0].index.to_list()
+        features.remove(TARGET)
+        
+        return df[features]
+
+
+    def create_y(self, df):
+        '''
+        Creates a dataframe of the full outcome column to be used as target
+
+        Input:
+            df (dataframe): cleaned dataframe (containing categorical vars)
+
+        Output:
+            df (dataframe): target dataframe
+        '''
+        return df[[TARGET]]
+
+
+    def train(self, test_size=TEST_SIZE, random_state=RANDOM_STATE):
+        '''
+        Splits the full x and y data into training and testing sets based on
+        a specified testing size and random seed. Trains a Decision Tree
+        model to predict y values based on given x values.
+
+        Inputs:
+            test_size (float): the proportional size of the testing data
+            random_state (int): random seed
+        '''
+        self.x_train, self.x_test, self.y_train, self.y_test = \
+        train_test_split(self.x_data, self.y_data, test_size=TEST_SIZE, \
+                         random_state=RANDOM_STATE)
+        model = tree.DecisionTreeClassifier()
+        self.trained_model = model.fit(self.x_train, self.y_train)
+
+
+    def predict(self):
+        '''
+        Runs a prediciton on the trained model from the testing data
+        '''
+        y_hat = self.trained_model.predict(self.x_test)
+        
+        return y_hat
+
+
+    def visualize(self, file_1=TREE):
+        '''
+        Exports a visualization of the trained tree
+
+        Inputs:
+            file_1 (str): filename to export image
+        '''
+        tree.export_graphviz(self.trained_model, out_file=file_1)
+
+
+    @property
+    def accuracy(self):
+        '''
+        Reports the accuracy of the trained classifier based on testing data
+        
+        Output:
+            accuracy_score (float): accuracy score
+        '''
+        return accuracy_score(self.y_test, self.y_hat)
+
+
+    @property
+    def predictor_set_size(self):
+        '''
+        Reports size of the predictor variable set
+
+        Output:
+            int: predictor set size
+        '''
+        return len(self.x_train.columns)
+
+
+def buildtree(df):
+    '''
+    Creates and traings a decision tree using the Classifier class
+
+    Input:
+        df (dataframe): clean dataframe (categorical variables only)
+    
+    Output:
+        tree (obj): returns a trained class object
+    '''
+    tree = Classifier(df)
+
+    return tree
