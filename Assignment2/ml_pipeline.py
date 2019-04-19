@@ -9,12 +9,10 @@ Machine Learning Pipeline
 
 Author: Tammy Glazer
 '''
-
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
-import graphviz
 from sklearn import tree
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
@@ -24,16 +22,16 @@ from sklearn.metrics import accuracy_score
 RAW_DATA = 'credit-data.csv'
 # Name of column to use as Index (specify '' if N/A)
 UNIQUE_ID = 'PersonID'
-# Specify of a single variable to view its distribution as a histogram
+# Specify a single variable to view its distribution as a histogram
 DISTRIBUTION = 'age'
 # List two continuous variables to view a scatterplot (examine correlation)
-TWO_CONTINUOUS = ['age', 'DebtRatio']
-# True if outcome variable is binary, otherwise state False
+CONTINUOUS_TWO = ['age', 'DebtRatio']
+# State true if outcome variable is binary, otherwise state False
 BINARY = True
 # State the name of the outcome variable (specify '' if N/A)
 TARGET = 'SeriousDlqin2yrs'
 # List any two categorical variables to view a heatmap (examine correlation)
-TWO_CATEGORICAL = ['NumberOfDependents', 'NumberRealEstateLoansOrLines']
+CATEGORICAL_TWO = ['NumberOfDependents', 'NumberRealEstateLoansOrLines']
 # Specify a continuous and categorical variable to view a barplot
 CATEGORICAL_VAR = 'NumberOfDependents'
 CONTINUOUS_VAR = 'DebtRatio'
@@ -48,12 +46,11 @@ BINS = pd.IntervalIndex.from_tuples([(20, 39), (40, 69), (70, 110)],
 #BINS = 5
 # Specify labels for discrete bins or leave list empty for default label
 LABEL = []
-# Specify a feature to create dummies from
+# Specify a feature to create dummies
 DUMMIES = 'zipcode'
 # Specify test size (train-test-split) and random state (seed)
 TEST_SIZE = 0.2
 RANDOM_STATE = 1
-
 
 # Set filenames to print tables/graphs/plots
 DATATYPES = 'datatypes.csv'
@@ -68,7 +65,7 @@ BARPLOT = 'barplot.png'
 TREE = 'tree.png'
 
 
-def read_data(file=RAW_DATA):
+def read_data(file=RAW_DATA, unique_id=UNIQUE_ID):
     '''
     Reads in a CSV using pandas and converts the CSV into a pandas dataframe.
     Sets the index to a unique identifier if an attribute(s) is specified.
@@ -80,9 +77,9 @@ def read_data(file=RAW_DATA):
         df (dataframe): a pandas dataframe
     '''
     df = pd.read_csv(file)
-    if UNIQUE_ID:
-        df.set_index(UNIQUE_ID, inplace=True)
-    
+    if unique_id:
+        df.set_index(unique_id, inplace=True)
+
     return df
 
 
@@ -101,47 +98,47 @@ def describe_data(df, file_1=DATATYPES, file_2=RANGE, file_3=NULLS,
         4. Describing the correlation between each pair of variables
     Saves a heatmap:
         Displaying these correlations between variables
-    
+
     Input:
         df (dataframe): a pandas dataframe
         file_1 (str): filename for the datatypes CSV
         file_2 (str): filename for the range/distribution CSV
         file_3 (str): filename for the nulls CSV
         file_4 (str): filename for the correlaton CSV
-        file_5 (str): filename for the correlation heatmap PNG 
+        file_5 (str): filename for the correlation heatmap PNG
     '''
     if UNIQUE_ID:
         if df.index.is_unique:
-            print('The index represent unique entities')
+            print('The index represents unique entities')
         else:
             print('The index DOES NOT represent unique entities')
 
-    df.dtypes.to_csv(DATATYPES, header=False)
+    df.dtypes.to_csv(file_1, header=False)
 
-    df.describe().to_csv(RANGE, header=False)
-    
+    df.describe().to_csv(file_2, header=df.columns)
+
     nulls = df.isna().sum().to_frame('count_null')
     nulls['pct_null'] = (nulls['count_null'] / df.size).round(4)
-    nulls.to_csv(NULLS)
+    nulls.to_csv(file_3)
 
-    df.corr().round(4).to_csv(CORRELATION_TABLE)
-    
+    df.corr().round(4).to_csv(file_4)
+
     plt.figure()
     sns.set(font_scale=0.5)
     heatmap = sns.heatmap(df.corr().round(2),
-                      cmap='Blues',
-                      annot=True,
-                      annot_kws={'size': 5},
-                      fmt='g',
-                      cbar=False,
-                      linewidths=0.5)
+                          cmap='Blues',
+                          annot=True,
+                          annot_kws={'size': 5},
+                          fmt='g',
+                          cbar=False,
+                          linewidths=0.5)
     heatmap.set_title('Correlation Between Variables')
     heatmap.figure.tight_layout()
-    plt.savefig(CORRELATION_IMAGE, dpi=400)
+    plt.savefig(file_5, dpi=400)
     plt.close()
 
 
-def distribution(df, distribution=DISTRIBUTION, file_1=HISTOGRAM):
+def distribution(df, distrib=DISTRIBUTION, file_1=HISTOGRAM):
     '''
     Creates a histogram for any variable ignoring null values.
     Note that skewed distributions highlight the presence of outliers.
@@ -153,18 +150,19 @@ def distribution(df, distribution=DISTRIBUTION, file_1=HISTOGRAM):
     '''
     plt.figure()
     sns.set(font_scale=0.75)
-    sns.distplot(df[distribution].dropna(), hist=True,
-                                        kde=False,
-                                        color = 'blue',
-                                        hist_kws={'edgecolor':'black'})
-    plt.title('{} distribution'.format(distribution))
-    plt.xlabel(distribution)
+    sns.distplot(df[distrib].dropna(),
+                 hist=True,
+                 kde=False,
+                 color='blue',
+                 hist_kws={'edgecolor':'black'})
+    plt.title('{} distribution'.format(distrib))
+    plt.xlabel(distrib)
     plt.ylabel('Number of Observations')
     plt.savefig(file_1, dpi=400)
     plt.close()
 
 
-def create_scatterplot(df, comparison=TWO_CONTINUOUS, file_1=SCATTERPLOT):
+def create_scatterplot(df, comparison=CONTINUOUS_TWO, file_1=SCATTERPLOT):
     '''
     Visualize the correlation between any two continuous variables on a
     scatterplot. Note: the target variable will appear on color only in the
@@ -190,7 +188,7 @@ def create_scatterplot(df, comparison=TWO_CONTINUOUS, file_1=SCATTERPLOT):
     plt.close()
 
 
-def create_heatmap(df, comparison=TWO_CATEGORICAL, file_1=HEATMAP):
+def create_heatmap(df, comparison=CATEGORICAL_TWO, file_1=HEATMAP):
     '''
     Visualize the correlation between any two categorical variables in a
     heatmap. This can be used to identify outliers as well.
@@ -238,7 +236,6 @@ def create_barplot(df, cat=CATEGORICAL_VAR, con=CONTINUOUS_VAR,
     y = con
 
     plt.figure()
-    groups = df.groupby(x).agg({y: 'mean'})
     bars = sns.barplot(x, y, data=df, color='salmon', saturation=0.7, ci=None)
     bars.set_title('Average {} By {}'.format(y, x))
     plt.savefig(file_1, dpi=400)
@@ -262,7 +259,7 @@ def find_outliers(df, outlier=OUTLIER):
     quartile_1 = np.percentile(col, 25)
     quartile_3 = np.percentile(col, 75)
     iqr = quartile_3 - quartile_1
-    lower_bound = quartile_1 - (1.5 * iqr) 
+    lower_bound = quartile_1 - (1.5 * iqr)
     upper_bound = quartile_3 + (1.5 * iqr)
     out = df.loc[(col > upper_bound) | (col < lower_bound)][outlier].to_frame()
     print(out)
@@ -319,7 +316,7 @@ def create_dummies(df, feature=DUMMIES):
     Inputs:
         df (dataframe): a pandas dataframe
         feature (str): a variable name
-    
+
     Output:
         df (dataframe): dataframe with new dummy variable columns
     '''
@@ -369,7 +366,7 @@ class Classifier:
         '''
         features = df.iloc[0].index.to_list()
         features.remove(TARGET)
-        
+
         return df[features]
 
 
@@ -397,8 +394,8 @@ class Classifier:
             random_state (int): random seed
         '''
         self.x_train, self.x_test, self.y_train, self.y_test = \
-        train_test_split(self.x_data, self.y_data, test_size=TEST_SIZE, \
-                         random_state=RANDOM_STATE)
+        train_test_split(self.x_data, self.y_data, test_size=test_size, \
+                         random_state=random_state)
         model = tree.DecisionTreeClassifier()
         self.trained_model = model.fit(self.x_train, self.y_train)
 
@@ -408,25 +405,15 @@ class Classifier:
         Runs a prediciton on the trained model from the testing data
         '''
         y_hat = self.trained_model.predict(self.x_test)
-        
+
         return y_hat
-
-
-    def visualize(self, file_1=TREE):
-        '''
-        Exports a visualization of the trained tree
-
-        Inputs:
-            file_1 (str): filename to export image
-        '''
-        tree.export_graphviz(self.trained_model, out_file=file_1)
 
 
     @property
     def accuracy(self):
         '''
         Reports the accuracy of the trained classifier based on testing data
-        
+
         Output:
             accuracy_score (float): accuracy score
         '''
@@ -450,10 +437,10 @@ def buildtree(df):
 
     Input:
         df (dataframe): clean dataframe (categorical variables only)
-    
-    Output:
-        tree (obj): returns a trained class object
-    '''
-    tree = Classifier(df)
 
-    return tree
+    Output:
+        classification_tree (obj): returns a trained class object
+    '''
+    classification_tree = Classifier(df)
+
+    return classification_tree
