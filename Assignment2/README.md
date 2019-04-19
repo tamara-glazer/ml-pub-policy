@@ -11,7 +11,7 @@ generate features/predictors, build a machine learning classifier, and
 provide an evaluation metric for this classifier. This pipeline leverages
 scikit-learn's Decition Tree module to build a Classifier class. The purpose
 of the file final_analysis.py is to use the machine learning pipeline to
-load and pre-process the Credit Dataset and to train a Decision Tree this data
+load and pre-process the Credit Dataset and to train a Decision Tree
 to predict who will experience financial distress in the next two years
 with a measured degree of accuracy.
 
@@ -34,7 +34,7 @@ The dataset used for this exercise is a modified version of the
 
 A CSV is included containing this modified dataset for easy reference
 (credit-data.csv). The extensible machine_learning pipeline is in the file:
-ml_pipeline.py. This pipeline is applied to the Credit Dataset within a
+ml_pipeline.py. This pipeline is applied to the Credit Dataset using a
 second file: final_analysis.py.
 
 The final writeup, including all tables and images, is included as a PDF in
@@ -62,8 +62,7 @@ tree.accuracy
 ```
 
 For the machine learning pipeline to be leveraged successfully with future
-datasets, all global variables at the top of the ml_pipeline final can
+datasets, all global variables at the top of the ml_pipeline.py file can
 be updated based on the conditions and instructions provided. These will
-directly update all necessary parameters in the remainder of the file.
-Alternatively, parameters can be directly passed into functions to override
-default values.
+update all necessary parameters in the remainder of the file. Alternatively,
+parameters can be directly passed into functions to override default values.
