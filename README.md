@@ -1,4 +1,4 @@
-# Machine Learning Assignment 4 - Updated Pipeline
+# Final Machine Learning Pipeline (See: Assignment 4)
 Leverages a modular, extensible, machine learning pipeline to train a variety
 of models to predict if projects on DonorsChoose will NOT get fully funded
 within 60 days of posting. Calculates evaluation metrics to better understand
